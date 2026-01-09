@@ -11,6 +11,32 @@ var mode, delta;
 var wechat = false;
 var playend = false, playdata = [];
 var wxData;
+var quizActive = false;
+var quizShown = false;
+var hasStarted = false;
+var quizQuestions = [
+	{
+		question: "What keeps the bird flying?",
+		options: ["Gravity", "Taps", "Wind"],
+		answer: 1
+	},
+	{
+		question: "Which key makes the bird jump?",
+		options: ["Space", "Shift", "Esc"],
+		answer: 0
+	},
+	{
+		question: "What should you avoid?",
+		options: ["Stars", "Pipes", "Clouds"],
+		answer: 1
+	},
+	{
+		question: "What happens when you pass pipes?",
+		options: ["Lose points", "Gain score", "Game ends"],
+		answer: 1
+	}
+];
+var quizElements = {};
 
 var clearCanvas = function(){
 	ctx.fillStyle = '#4EC0CA';
@@ -38,6 +64,7 @@ var loadImages = function(){
 				pipes.push(Math.floor(Math.random() * (height - 300 - delta) + 10));
 				pipesDir.push((Math.random() > 0.5));
 			}
+			hasStarted = false;
 			drawCanvas();
 		}
 	}
@@ -119,9 +146,12 @@ var deathAnimation = function(){
         if(window.window.WeixinApi && window.WeixinJSBridge) {
             //alert("您在 " + ["easy", "normal", "hard"][mode] + " 模式中取得 " + score + " 分，右上角分享成绩到朋友圈吧~");
         }
-    }
+	}
 	ctx.drawImage(ready, width / 2 - 57, height / 2 + 10);
 	maxScore = Math.max(maxScore, score);
+	if(hasStarted && !quizShown){
+		startQuiz();
+	}
 }
 
 var drawSky = function(){
@@ -254,25 +284,86 @@ var anim = function(){
 	animation = setInterval(drawCanvas, 1000 / 60);
 }
 
+var resetGameState = function(){
+	dist = 0;
+	birdY = (height - 112) / 2;
+	birdF = 0;
+	birdN = 0;
+	birdV = 0;
+	death = 0;
+	score = 0;
+	birdPos = width * 0.35;
+	pipeSt = 0;
+	pipeNumber = 10;
+	pipes = [];
+	pipesDir = [];
+	for(var i = 0; i < 10; ++i){
+		pipes.push(Math.floor(Math.random() * (height - 300 - delta) + 10));
+		pipesDir.push((Math.random() > 0.5));
+	}
+}
+
+var getSafeBirdY = function(){
+	if(pipes && pipes.length > pipeSt){
+		var safeY = pipes[pipeSt] + 60;
+		return Math.min(Math.max(safeY, 10), height - 180);
+	}
+	return (height - 112) / 2;
+}
+
+var startQuiz = function(){
+	if(quizActive || !quizElements.overlay)
+		return;
+	quizActive = true;
+	quizShown = true;
+	var question = quizQuestions[Math.floor(Math.random() * quizQuestions.length)];
+	quizElements.question.textContent = question.question;
+	quizElements.options.innerHTML = "";
+	quizElements.feedback.textContent = "";
+	for(var i = 0; i < question.options.length; i++){
+		(function(optionIndex){
+			var option = document.createElement("button");
+			option.className = "quiz-option";
+			option.textContent = question.options[optionIndex];
+			option.onclick = function(){
+				if(optionIndex === question.answer){
+					quizElements.feedback.style.color = "#1a7f37";
+					quizElements.feedback.textContent = "Correct! Resuming...";
+					resumeFromQuiz();
+				}
+				else{
+					quizElements.feedback.style.color = "#d00000";
+					quizElements.feedback.textContent = "Try again!";
+				}
+			};
+			quizElements.options.appendChild(option);
+		})(i);
+	}
+	quizElements.overlay.style.display = "flex";
+}
+
+var resumeFromQuiz = function(){
+	quizElements.overlay.style.display = "none";
+	quizActive = false;
+	quizShown = false;
+	death = 0;
+	birdV = 0;
+	birdF = 0;
+	birdN = 0;
+	birdY = getSafeBirdY();
+	anim();
+}
+
 var jump = function(){
+	if(quizActive)
+		return;
 	if(death){
-		dist = 0;
-		birdY = (height - 112) / 2;
-		birdF = 0;
-		birdN = 0;
-		birdV = 0;
-		death = 0;
-		score = 0;
-		birdPos = width * 0.35;
-		pipeSt = 0;
-		pipeNumber = 10;
-		pipes = [];
-		pipesDir = [];
-		for(var i = 0; i < 10; ++i){
-			pipes.push(Math.floor(Math.random() * (height - 300 - delta) + 10));
-			pipesDir.push((Math.random() > 0.5));
+		if(!hasStarted){
+			resetGameState();
+			hasStarted = true;
+			anim();
 		}
-		anim();
+		return;
 	}
 	if(mode == 0)
 		birdV = 6;
@@ -390,6 +481,10 @@ window.onload = function(){
     normal.onclick = normalMode;
 	hard = document.getElementById("hard");
     hard.onclick = hardMode;
+	quizElements.overlay = document.getElementById("quiz-overlay");
+	quizElements.question = document.getElementById("quiz-question");
+	quizElements.options = document.getElementById("quiz-options");
+	quizElements.feedback = document.getElementById("quiz-feedback");
 	document.getElementById("flashlight").onclick = flashlight;
 	//document.getElementById("hidden").onclick = hidden;
 	window.onresize = function() {
